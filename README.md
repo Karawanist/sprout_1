@@ -9,6 +9,7 @@ Sprout is an Egypt-focused agricultural decision-support prototype built around 
 - Compare recent temperature observations with a plant profile, clearly marked unverified until a person adds checked values and citations.
 - Train a Random Forest to estimate **vegetation greenness anomaly** from the 32 days of weather before a MODIS 16-day composite.
 - Review historical model estimates only for the supported study regions, alongside observed MODIS greenness and a tree-disagreement range.
+- Ask questions in the app's text box. The MVP uses transparent keyword routing and templates, not an LLM; it summarizes available weather and supported historical greenness, and declines unsupported advice requests.
 
 NDVI is a satellite-derived greenness measure. It is not yield, crop type, field condition, crop suitability, or irrigation need. POWER's grid is coarse and most farmland in the study area is irrigated; weather may explain only a modest share of greenness changes. Consult local agricultural experts for important decisions.
 
@@ -50,6 +51,8 @@ Launch the app:
 ```
 
 The weather and profile panels work after POWER preparation. The model panel appears after NDVI preparation and successful training. Missing files produce a setup message.
+
+The text box supports questions about recent conditions and historical greenness. Include a region name (for example, `delta_gharbia`) and optionally a date in `YYYY-MM-DD` form. It cannot answer open-ended questions or predict yield, irrigation, crop suitability, pests, or disease.
 
 ## Project layout
 

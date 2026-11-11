@@ -8,6 +8,7 @@ import pandas as pd
 import streamlit as st
 from src.knowledge import load_profiles, compare_to_profile
 from src.predict import predict_with_range
+from src.data_collection import REGIONS
 
 st.set_page_config(page_title="Sprout", page_icon="🌱", layout="wide")
 st.title("🌱 Sprout")
@@ -53,6 +54,7 @@ with right:
 
 st.subheader("Model: vegetation greenness vs. normal")
 model_path, table_path, clim_path = ROOT / "models/sprout_rf_v1.joblib", ROOT / "data/processed/ndvi_weather_features.csv", ROOT / "models/ndvi_climatology.csv"
+bundle = table = clim = None
 if not all(p.exists() for p in (model_path, table_path, clim_path)):
     st.info("The model panel will appear after data preparation and successful training. It only supports historical periods in the study regions.")
 else:
@@ -80,3 +82,80 @@ else:
 
 with st.expander("What Sprout cannot tell you"):
     st.write("This prototype does not predict yield, crop suitability, irrigation schedules, pests, disease, field conditions, or locations beyond its Egyptian study regions. NASA POWER is coarse regional data, and most study farmland is irrigated, so weather may explain only a modest share of greenness changes. Consult a local agricultural advisor.")
+
+st.subheader("Ask Sprout")
+st.caption("Ask about recent conditions or a supported historical greenness estimate. Sprout uses fixed, transparent rules here; it does not provide open-ended agricultural advice.")
+if "sprout_messages" not in st.session_state:
+    st.session_state.sprout_messages = []
+for message in st.session_state.sprout_messages:
+    with st.chat_message(message["role"]):
+        st.write(message["content"])
+
+def answer_question(question: str) -> str:
+    q = question.lower()
+    unsupported = ("yield", "harvest", "irrigat", "water schedule", "disease", "pest", "grow ", "suitable", "recommend a crop")
+    if any(term in q for term in unsupported):
+        return ("I can't answer that with this prototype. It does not predict yield, crop suitability, irrigation needs, pests, or disease. "
+                "I can summarize NASA POWER conditions or, when trained data is available, estimate historical vegetation greenness versus normal.")
+
+    chosen_region = region
+    for name in REGIONS:
+        readable = name.replace("_", " ")
+        if name in q or readable in q:
+            chosen_region = name
+            break
+    subset_weather = weather[weather.region == chosen_region].sort_values("date")
+    if subset_weather.empty:
+        return f"I don't have weather observations for {chosen_region}. Choose one of the five study regions."
+
+    crop_key = crop
+    for key, profile in profiles.items():
+        if key in q or profile["display_name"].lower() in q:
+            crop_key = key
+            break
+    asks_greenness = any(term in q for term in ("ndvi", "green", "greenness", "anomaly", "model estimate"))
+    if asks_greenness:
+        if bundle is None or table is None or clim is None:
+            return "The greenness model isn't ready: it needs MODIS NDVI data and a successfully trained model. Weather-only data can't train this target."
+        import re
+        match = re.search(r"\b\d{4}-\d{2}-\d{2}\b", question)
+        subset = table[table.region == chosen_region].sort_values("date")
+        if subset.empty:
+            return f"There are no joined MODIS weather and NDVI observations for {chosen_region}."
+        if match:
+            asked_date = pd.Timestamp(match.group(0))
+            candidates = subset[subset.date <= asked_date]
+            if candidates.empty:
+                return f"I don't have a trained historical composite on or before {asked_date.date()} for {chosen_region}."
+            row = candidates.iloc[-1]
+        else:
+            row = subset.iloc[-1]
+        X = row[bundle["features"]].to_frame().T.astype(float)
+        mean, low, high = predict_with_range(bundle["model"], X)
+        normal = clim[(clim.region == chosen_region) & (clim.doy == row.doy)]
+        if normal.empty:
+            return "The model has no training climatology for this composite date."
+        observed = row.ndvi - normal.ndvi_clim.iloc[0]
+        return (f"For {chosen_region.replace('_', ' ')} on the historical composite starting {row.date.date()}, "
+                f"Sprout estimates vegetation greenness at {mean[0]:+.3f} NDVI versus normal "
+                f"(tree disagreement range {low[0]:+.3f} to {high[0]:+.3f}). NASA MODIS observed {observed:+.3f}. "
+                "NDVI is greenness, not yield; the range is not a formal confidence interval.")
+
+    latest = subset_weather.tail(days)
+    summary = (f"NASA POWER shows {len(latest)} available daily observations for {chosen_region.replace('_', ' ')} "
+               f"through {latest.date.max().date()}.")
+    if "T2M_MAX" in latest:
+        summary += f" Average daily high: {latest.T2M_MAX.mean():.1f} °C."
+    if "PRECTOTCORR" in latest:
+        summary += f" Total precipitation: {latest.PRECTOTCORR.sum():.1f} mm."
+    if any(term in q for term in ("plant", "crop", "tomato", "wheat", "maize", "profile")):
+        notes = compare_to_profile(latest, profiles[crop_key])
+        summary += " Profile notes for " + profiles[crop_key]["display_name"] + ": " + " ".join(notes)
+    summary += " POWER is regional data, not a measurement of an individual field."
+    return summary
+
+if question := st.chat_input("Ask about recent conditions or historical greenness…"):
+    st.session_state.sprout_messages.append({"role": "user", "content": question})
+    response = answer_question(question)
+    st.session_state.sprout_messages.append({"role": "assistant", "content": response})
+    st.rerun()
