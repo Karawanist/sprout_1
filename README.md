@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # 🌱 Sprout
 
 Sprout is an Egypt-focused agricultural decision-support prototype built around downloaded NASA POWER weather and MODIS NDVI CSV files. It is educational and supports decisions; it does not guarantee yields or outcomes.
@@ -84,3 +85,6 @@ The study points are rough starting coordinates, not verified field locations. I
 Before treating this as an MVP, run the workflow with real data, record train/validation/test MAE and R², confirm the model beats the zero-anomaly and constant baselines on held-out years, and perform leave-one-region-out validation. The geographic diagnostic uses the available anomaly table and should be reported with its documented climatology limitation. Inspect missingness and each downloaded CSV's schema. Treat weak or negative performance as a valid result and do not deploy unsupported predictions.
 
 This repository is an educational prototype, not guaranteed agricultural advice. NASA data outages or absent source files are reported in the interface; this offline CSV version does not make live NASA calls.
+=======
+# sprout
+>>>>>>> 3b15e5108ca2a9288b51e09e8810f776362d1e3e
