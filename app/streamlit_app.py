@@ -43,9 +43,15 @@ with left:
     st.subheader("NASA POWER observations")
     available = [c for c in ["T2M_MAX", "T2M_MIN"] if c in recent]
     if available: st.line_chart(recent[available])
-    if "PRECTOTCORR" in recent: st.bar_chart(recent["PRECTOTCORR"])
-    if "PRECTOTCORR" in recent: st.write(f"Total precipitation: **{recent.PRECTOTCORR.sum():.1f} mm**.")
-    if "GWETROOT" in recent: st.write(f"Average root-zone soil wetness index: **{recent.GWETROOT.mean():.2f}** (0 = dry, 1 = wet).")
+    if "PRECTOTCORR" in recent and recent.PRECTOTCORR.notna().any():
+        st.bar_chart(recent["PRECTOTCORR"])
+        st.write(f"Total precipitation: **{recent.PRECTOTCORR.sum():.1f} mm**.")
+    else:
+        st.caption("Precipitation was not included in the downloaded POWER files.")
+    if "GWETROOT" in recent and recent.GWETROOT.notna().any():
+        st.write(f"Average root-zone soil wetness index: **{recent.GWETROOT.mean():.2f}** (0 = dry, 1 = wet).")
+    else:
+        st.caption("Root-zone soil wetness was not included in the downloaded POWER files.")
 with right:
     st.subheader(f"Profile comparison: {profiles[crop]['display_name']}")
     for note in compare_to_profile(recent.reset_index(), profiles[crop]): st.write(f"• {note}")
@@ -146,8 +152,10 @@ def answer_question(question: str) -> str:
                f"through {latest.date.max().date()}.")
     if "T2M_MAX" in latest:
         summary += f" Average daily high: {latest.T2M_MAX.mean():.1f} °C."
-    if "PRECTOTCORR" in latest:
+    if "PRECTOTCORR" in latest and latest.PRECTOTCORR.notna().any():
         summary += f" Total precipitation: {latest.PRECTOTCORR.sum():.1f} mm."
+    else:
+        summary += " Precipitation is not present in the downloaded POWER files."
     if any(term in q for term in ("plant", "crop", "tomato", "wheat", "maize", "profile")):
         notes = compare_to_profile(latest, profiles[crop_key])
         summary += " Profile notes for " + profiles[crop_key]["display_name"] + ": " + " ".join(notes)

@@ -8,6 +8,7 @@ TARGET = "ndvi_anomaly"
 
 def clean_weather(weather):
     weather = weather.copy()
+    supplied = set(weather.columns)
     weather["date"] = pd.to_datetime(weather["date"], errors="coerce")
     for col in WEATHER_COLS:
         if col not in weather:
@@ -15,7 +16,13 @@ def clean_weather(weather):
         weather[col] = pd.to_numeric(weather[col], errors="coerce").replace(-999, np.nan)
     weather = weather.dropna(subset=["date"]).sort_values(["region", "date"])
     weather[WEATHER_COLS] = weather.groupby("region")[WEATHER_COLS].transform(lambda s: s.interpolate(limit=3))
-    valid = weather.T2M_MAX.between(-10, 60) & weather.PRECTOTCORR.between(0, 300) & weather.GWETROOT.between(0, 1)
+    # Keep valid observations when a download omitted optional parameters.
+    # Model preparation checks for all required parameters separately.
+    valid = weather.T2M_MAX.between(-10, 60)
+    if "PRECTOTCORR" in supplied:
+        valid &= weather.PRECTOTCORR.isna() | weather.PRECTOTCORR.between(0, 300)
+    if "GWETROOT" in supplied:
+        valid &= weather.GWETROOT.isna() | weather.GWETROOT.between(0, 1)
     return weather.loc[valid].copy()
 
 def load_ndvi_csv(path):
