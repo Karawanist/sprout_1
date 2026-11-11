@@ -1,0 +1,38 @@
+{
+  "tomato": {
+    "display_name": "Tomato",
+    "temp_optimal_c": null,
+    "temp_min_survival_c": null,
+    "water_need": null,
+    "soil": null,
+    "season_notes": null,
+    "risks": [],
+    "sources": [],
+    "verified": false,
+    "profile_note": "No agronomic thresholds have been entered; do not use this profile as crop advice."
+  },
+  "wheat": {
+    "display_name": "Wheat",
+    "temp_optimal_c": null,
+    "temp_min_survival_c": null,
+    "water_need": null,
+    "soil": null,
+    "season_notes": null,
+    "risks": [],
+    "sources": [],
+    "verified": false,
+    "profile_note": "No agronomic thresholds have been entered; do not use this profile as crop advice."
+  },
+  "maize": {
+    "display_name": "Maize",
+    "temp_optimal_c": null,
+    "temp_min_survival_c": null,
+    "water_need": null,
+    "soil": null,
+    "season_notes": null,
+    "risks": [],
+    "sources": [],
+    "verified": false,
+    "profile_note": "No agronomic thresholds have been entered; do not use this profile as crop advice."
+  }
+}
