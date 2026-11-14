@@ -57,7 +57,7 @@ The model predicts `ndvi_anomaly`: observed NDVI minus a training-years-only reg
 
 ## Optional local LLM with Ollama
 
-The LLM is optional and only rewrites the answer constructed from NASA and plant-profile evidence. It does not search for facts, invent crop advice, or change model values. Ollama runs the model on the computer where Sprout is running, so no API key or per-request API billing is needed.
+The local LLM is optional and can rephrase Sprout's NASA and plant-profile evidence. Local Ollama chat needs no API key or per-request API billing.
 
 Install [Ollama for Windows](https://ollama.com/download), then open PowerShell and download a small starter model:
 
@@ -73,7 +73,26 @@ OLLAMA_MODEL = "llama3.2:3b"
 OLLAMA_BASE_URL = "http://localhost:11434"
 ```
 
+To answer broader questions using current web results, create a free Ollama account and API key at [Ollama API keys](https://ollama.com/settings/keys), then add this to the same ignored local secrets file:
+
+```toml
+OLLAMA_API_KEY = "your-key"
+```
+
+Restart Sprout, enable **Use LLM to phrase responses**, then enable **Search the web for a broader, sourced answer**. Sprout sends the question to Ollama's hosted web-search service and passes the returned snippets to your local Ollama model for a conversational, source-linked summary. The free account has usage limits; higher limits are available through Ollama subscriptions. Avoid entering personal or sensitive information. Search uses snippets and does not automatically read full web pages. See [Ollama web-search documentation](https://docs.ollama.com/capabilities/web-search).
+
 This local setup is for a Sprout process running on the same computer as Ollama. A Streamlit Community Cloud app cannot reach Ollama running on your personal computer. Each person can run Sprout and Ollama locally, or you would need to host an Ollama server somewhere accessible to the app.
+
+### Use Ollama in Streamlit Community Cloud
+
+The cloud app can use Ollama's hosted API instead of a local Ollama server. In Streamlit Community Cloud, open **Manage app → Settings → Secrets** and add:
+
+```toml
+OLLAMA_API_KEY = "your-key"
+OLLAMA_CLOUD_MODEL = "gpt-oss:20b-cloud"
+```
+
+After saving and rebooting the app, select **Ollama Cloud (hosted)**. The default hosted model is `gpt-oss:20b-cloud`; model availability and included starter usage depend on your Ollama account. Ollama's Free plan includes limited starter usage, and usage beyond included credits may require buying credits. Check [current Ollama pricing](https://ollama.com/pricing). In a public app, every viewer can use the configured account quota, so monitor usage and do not add paid credits unless you intend to.
 
 OpenAI remains available if configured; it uses the Responses API and may incur charges:
 
@@ -90,7 +109,7 @@ Never commit the key to GitHub. Without a key, the app keeps using its determini
 .venv\Scripts\streamlit.exe run app/streamlit_app.py
 ```
 
-The text box accepts plain-language questions, but answers are limited to the loaded evidence. The LLM is not a substitute for local agronomic advice.
+The text box accepts plain-language questions. Without web search, answers are limited to loaded Sprout evidence; web mode adds current search snippets and visible links. The LLM is not a substitute for local agronomic advice.
 
 ## Data and reference sources
 
@@ -105,11 +124,11 @@ The text box accepts plain-language questions, but answers are limited to the lo
 
 Structured profiles in `data/knowledge/plant_profiles.json` cite [FAO EcoCrop tomato](https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=1379), [common wheat](https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=2114), and [maize](https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=2175). These are global screening ranges, not locally validated recommendations or variety-specific setpoints. Annual rainfall ranges are not crop water requirements, particularly for irrigated farming.
 
-The five study coordinates are project example points stored in `data/raw/study_points.csv`, not an externally validated set of farm locations. The optional language model is [Ollama](https://ollama.com/) running `llama3.2:3b` locally; it only rephrases evidence supplied by Sprout and is not a source of agronomic or weather facts.
+The five study coordinates are project example points stored in `data/raw/study_points.csv`, not an externally validated set of farm locations. The optional language model is [Ollama](https://ollama.com/) running `llama3.2:3b` locally or a configured hosted Ollama model; it is not a source of agronomic or weather facts. Optional web search uses [Ollama Web Search](https://docs.ollama.com/capabilities/web-search), with retrieved links shown alongside the answer.
 
 ## Deployment
 
-Push the app code and required runtime artifacts to the GitHub branch connected to Streamlit Community Cloud. For the model panel, include the trained `models/` artifacts and `data/processed/ndvi_weather_features.csv`; those files are ignored by default and must be explicitly included for deployment. The Ollama option only works in deployments that can reach an Ollama server; configure `OPENAI_API_KEY` in Streamlit Secrets if using OpenAI.
+Push the app code and required runtime artifacts to the GitHub branch connected to Streamlit Community Cloud. For the model panel, include the trained `models/` artifacts and `data/processed/ndvi_weather_features.csv`; those files are ignored by default and must be explicitly included for deployment. Configure `OLLAMA_API_KEY` in Streamlit Secrets to use **Ollama Cloud (hosted)**, or configure `OPENAI_API_KEY` if using OpenAI.
 
 ## Limitations
 
