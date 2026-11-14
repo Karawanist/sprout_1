@@ -12,7 +12,7 @@ from src.knowledge import load_profiles, compare_to_profile
 from src.predict import predict_with_range
 from src.data_collection import REGIONS
 from src.power_api import fetch_region_power_daily
-from src.llm import rephrase_evidence
+from src.llm import rephrase_evidence, rephrase_with_gemini
 
 st.set_page_config(page_title="Sprout", page_icon="🌱", layout="wide")
 st.title("🌱 Sprout")
@@ -143,17 +143,28 @@ with st.expander("What Sprout cannot tell you"):
 st.subheader("Ask Sprout")
 st.caption("Ask about recent conditions, sourced plant profiles, or supported historical greenness. The optional LLM only rephrases Sprout's computed evidence; it does not provide independent agricultural facts.")
 try:
+    gemini_key = st.secrets.get("GEMINI_API_KEY", "") or os.environ.get("GEMINI_API_KEY", "")
+    gemini_model = st.secrets.get("GEMINI_MODEL", "gemini-2.5-flash-lite") or os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
     openai_key = st.secrets.get("OPENAI_API_KEY", "") or os.environ.get("OPENAI_API_KEY", "")
     openai_model = st.secrets.get("OPENAI_MODEL", "gpt-6-astra") or os.environ.get("OPENAI_MODEL", "gpt-6-astra")
 except Exception:
+    gemini_key = os.environ.get("GEMINI_API_KEY", "")
+    gemini_model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
     openai_key = os.environ.get("OPENAI_API_KEY", "")
     openai_model = os.environ.get("OPENAI_MODEL", "gpt-6-astra")
-use_llm = False
+providers = []
+if gemini_key:
+    providers.append("Gemini (free tier)")
 if openai_key:
-    use_llm = st.checkbox("Use OpenAI to phrase responses", value=False)
+    providers.append("OpenAI")
+selected_provider = st.selectbox("Optional LLM provider", providers, index=0) if providers else None
+use_llm = bool(selected_provider and st.checkbox("Use LLM to phrase responses", value=False))
+if selected_provider == "Gemini (free tier)":
+    st.caption("Gemini's free tier has usage limits and Google may use free-tier content to improve products. Avoid personal or sensitive information.")
+elif selected_provider == "OpenAI":
     st.caption("When enabled, Sprout sends your question and computed answer evidence to OpenAI. Avoid personal or sensitive information; API usage may incur charges.")
 else:
-    st.caption("OpenAI phrasing is off. Add OPENAI_API_KEY to local environment or Streamlit Secrets to enable it.")
+    st.caption("LLM phrasing is off. Add GEMINI_API_KEY (free-tier option) or OPENAI_API_KEY to local environment or Streamlit Secrets to enable it.")
 if "sprout_messages" not in st.session_state:
     st.session_state.sprout_messages = []
 for message in st.session_state.sprout_messages:
@@ -248,8 +259,11 @@ if question := st.chat_input("Ask about recent conditions or historical greennes
     response = answer_question(question)
     if use_llm:
         try:
-            response = rephrase_evidence(question, response, openai_key, openai_model)
+            if selected_provider == "Gemini (free tier)":
+                response = rephrase_with_gemini(question, response, gemini_key, gemini_model)
+            else:
+                response = rephrase_evidence(question, response, openai_key, openai_model)
         except Exception:
-            response += "\n\n(OpenAI phrasing is unavailable right now; this answer uses Sprout's rule-based response.)"
+            response += f"\n\n({selected_provider} phrasing is unavailable right now; this answer uses Sprout's rule-based response.)"
     st.session_state.sprout_messages.append({"role": "assistant", "content": response})
     st.rerun()

@@ -8,7 +8,7 @@ Sprout is an Egypt-focused agricultural decision-support prototype. It combines 
 - Download historical weather, including precipitation and root-zone wetness, for model preparation.
 - Compare recent mean air temperature with FAO EcoCrop's global ecological ranges for tomato, wheat, and maize. Profiles are source-cited but not validated for Egyptian cultivars, fields, or management.
 - Train a Random Forest to estimate historical vegetation greenness anomaly from the preceding 32 days of weather, after authentic MODIS NDVI observations are supplied.
-- Use the chat box to answer from the available weather, profile, and model evidence. An optional OpenAI LLM can phrase answers using only that evidence.
+- Use the chat box to answer from the available weather, profile, and model evidence. Optional Gemini (free tier) or OpenAI can phrase answers using only that evidence.
 
 NDVI is a satellite-derived greenness measure. It is not yield, crop type, field condition, crop suitability, or irrigation need. POWER's weather and wetness values have different source resolutions. Consult local agricultural experts before making important decisions.
 
@@ -55,20 +55,20 @@ After both the full POWER history and NDVI file are present:
 
 The model predicts `ndvi_anomaly`: observed NDVI minus a training-years-only regional seasonal baseline. It is a historical estimate for the study regions, not a yield or forecast model. Report metrics honestly; do not present a predictive capability unless it beats the baselines on held-out years.
 
-## Optional OpenAI LLM
+## Optional LLM (Gemini free tier or OpenAI)
 
-The LLM is optional and only rewrites the answer constructed from NASA and plant-profile evidence. It does not search for facts, invent crop advice, or change model values. When enabled, Sprout sends the user's question and computed evidence to OpenAI; avoid entering personal or sensitive information. API usage may incur charges. The integration uses the OpenAI Responses API.
+The LLM is optional and only rewrites the answer constructed from NASA and plant-profile evidence. It does not search for facts, invent crop advice, or change model values. Gemini is the suggested no-cost-to-start option; Google currently offers a free tier with model-specific usage limits. Free-tier content may be used to improve Google's products. Avoid entering personal or sensitive information. Review [current Gemini API pricing and limits](https://ai.google.dev/gemini-api/docs/pricing).
 
-API reference: [OpenAI text generation with the Responses API](https://developers.openai.com/api/docs/guides/text?lang=python).
-
-For local use, create `.streamlit/secrets.toml` (this file is ignored by Git):
+Create a Gemini API key in [Google AI Studio](https://aistudio.google.com/apikey). For local use, create `.streamlit/secrets.toml` (this file is ignored by Git):
 
 ```toml
-OPENAI_API_KEY = "your-key"
-OPENAI_MODEL = "gpt-6-astra"
+GEMINI_API_KEY = "your-key"
+GEMINI_MODEL = "gemini-2.5-flash-lite"
 ```
 
-For Streamlit Community Cloud, open **Manage app → Settings → Secrets** and add:
+For Streamlit Community Cloud, open **Manage app → Settings → Secrets** and add the same two lines. Then select **Gemini (free tier)** and enable **Use LLM to phrase responses** in the app.
+
+OpenAI remains available if configured; it uses the Responses API and may incur charges:
 
 ```toml
 OPENAI_API_KEY = "your-key"
@@ -91,7 +91,7 @@ The structured profiles in `data/knowledge/plant_profiles.json` cite [FAO EcoCro
 
 ## Deployment
 
-Push the app code and required runtime artifacts to the GitHub branch connected to Streamlit Community Cloud. For the model panel, include the trained `models/` artifacts and `data/processed/ndvi_weather_features.csv`; those files are ignored by default and must be explicitly included for deployment. Configure `OPENAI_API_KEY` in Streamlit Secrets if using the LLM.
+Push the app code and required runtime artifacts to the GitHub branch connected to Streamlit Community Cloud. For the model panel, include the trained `models/` artifacts and `data/processed/ndvi_weather_features.csv`; those files are ignored by default and must be explicitly included for deployment. Configure `GEMINI_API_KEY` or `OPENAI_API_KEY` in Streamlit Secrets if using the LLM.
 
 ## Limitations
 
