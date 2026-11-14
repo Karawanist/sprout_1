@@ -1,93 +1,103 @@
-<<<<<<< HEAD
 # 🌱 Sprout
 
-Sprout is an Egypt-focused agricultural decision-support prototype built around downloaded NASA POWER weather and MODIS NDVI CSV files. It is educational and supports decisions; it does not guarantee yields or outcomes.
+Sprout is an Egypt-focused agricultural decision-support prototype. It combines NASA POWER weather, FAO EcoCrop plant profiles, and a MODIS NDVI anomaly model. It supports decisions; it does not guarantee outcomes.
 
-## What the MVP supports
+## What it can do
 
-- Explore recent NASA POWER weather and root-zone wetness for five example Nile Delta and Nile Valley study points.
-- Compare recent temperature observations with a plant profile, clearly marked unverified until a person adds checked values and citations.
-- Train a Random Forest to estimate **vegetation greenness anomaly** from the 32 days of weather before a MODIS 16-day composite.
-- Review historical model estimates only for the supported study regions, alongside observed MODIS greenness and a tree-disagreement range.
-- Ask questions in the app's text box. The MVP uses transparent keyword routing and templates, not an LLM; it summarizes available weather and supported historical greenness, and declines unsupported advice requests.
+- Fetch recent weather from the NASA POWER API for five example Nile Delta and Nile Valley study points.
+- Download historical weather, including precipitation and root-zone wetness, for model preparation.
+- Compare recent mean air temperature with FAO EcoCrop's global ecological ranges for tomato, wheat, and maize. Profiles are source-cited but not validated for Egyptian cultivars, fields, or management.
+- Train a Random Forest to estimate historical vegetation greenness anomaly from the preceding 32 days of weather, after authentic MODIS NDVI observations are supplied.
+- Use the chat box to answer from the available weather, profile, and model evidence. An optional OpenAI LLM can phrase answers using only that evidence.
 
-NDVI is a satellite-derived greenness measure. It is not yield, crop type, field condition, crop suitability, or irrigation need. POWER's grid is coarse and most farmland in the study area is irrigated; weather may explain only a modest share of greenness changes. Consult local agricultural experts for important decisions.
+NDVI is a satellite-derived greenness measure. It is not yield, crop type, field condition, crop suitability, or irrigation need. POWER's weather and wetness values have different source resolutions. Consult local agricultural experts before making important decisions.
 
-## Quick start
+## Setup
 
-Requires Python 3.10 or newer. Create an environment and install dependencies:
+Requires Python 3.10 or newer. In PowerShell from the project folder:
 
 ```powershell
 python -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-Download the CSVs described in [`data/raw/README.md`](data/raw/README.md). Keep source downloads unchanged. Prepare derived tables:
+## Get NASA POWER weather through the API
+
+The API client requests all five fields in one call to NASA's daily point endpoint using the AG community setting. POWER describes root-zone wetness in its hydrology documentation; its effective resolution differs from the meteorological fields. Historical requests are sequential. See [`data/raw/README.md`](data/raw/README.md).
+
+API references: [NASA POWER daily point API](https://power.larc.nasa.gov/docs/services/api/temporal/daily/) and [NASA POWER hydrology data notes](https://power.larc.nasa.gov/docs/methodology/data/sources_hydrology/).
+
+Fetch daily history for the study regions (the originals are saved separately under `data/raw/api_power/`):
+
+```powershell
+.venv\Scripts\python.exe -m src.fetch_power_history
+```
+
+The app also fetches its recent period live from NASA POWER and falls back to the prepared CSV if the API is temporarily unavailable.
+
+Prepare the weather table:
 
 ```powershell
 .venv\Scripts\python.exe -m src.prepare_data
 ```
 
-If the AppEEARS NDVI file is not ready, preparation still cleans and saves the POWER table, then prints the next step. Once both sources are present, it writes `data/processed/ndvi_weather_features.csv`.
+This saves cleaned weather first. Model features additionally need an AppEEARS MODIS NDVI CSV at `data/raw/appeears_ndvi.csv`, using `MOD13Q1.061` and region labels from `study_points.csv`. Without this observed target, no model is trained.
 
-Train and evaluate the anomaly model:
+## Train and evaluate the NDVI model
+
+After both the full POWER history and NDVI file are present:
 
 ```powershell
+.venv\Scripts\python.exe -m src.prepare_data
 .venv\Scripts\python.exe -m src.train
-```
-
-Run the geographic transfer diagnostic separately:
-
-```powershell
 .venv\Scripts\python.exe -m src.evaluate_regions
 ```
 
-The training script uses training-year-only NDVI climatology and time splits with a 32-day gap. It reports validation metrics against a constant baseline and a Ridge baseline, evaluates the test set once, and saves artifacts under `models/`. A useful result has to beat the baseline on held-out data; do not present metrics until training on real downloads succeeds.
+The model predicts `ndvi_anomaly`: observed NDVI minus a training-years-only regional seasonal baseline. It is a historical estimate for the study regions, not a yield or forecast model. Report metrics honestly; do not present a predictive capability unless it beats the baselines on held-out years.
 
-Launch the app:
+## Optional OpenAI LLM
+
+The LLM is optional and only rewrites the answer constructed from NASA and plant-profile evidence. It does not search for facts, invent crop advice, or change model values. When enabled, Sprout sends the user's question and computed evidence to OpenAI; avoid entering personal or sensitive information. API usage may incur charges. The integration uses the OpenAI Responses API.
+
+API reference: [OpenAI text generation with the Responses API](https://developers.openai.com/api/docs/guides/text?lang=python).
+
+For local use, create `.streamlit/secrets.toml` (this file is ignored by Git):
+
+```toml
+OPENAI_API_KEY = "your-key"
+OPENAI_MODEL = "gpt-6-astra"
+```
+
+For Streamlit Community Cloud, open **Manage app → Settings → Secrets** and add:
+
+```toml
+OPENAI_API_KEY = "your-key"
+OPENAI_MODEL = "gpt-6-astra"
+```
+
+Never commit the key to GitHub. Without a key, the app keeps using its deterministic evidence-based answers.
+
+## Run the app
 
 ```powershell
 .venv\Scripts\streamlit.exe run app/streamlit_app.py
 ```
 
-The weather and profile panels work after POWER preparation. The model panel appears after NDVI preparation and successful training. Missing files produce a setup message.
+The text box accepts plain-language questions, but answers are limited to the loaded evidence. The LLM is not a substitute for local agronomic advice.
 
-The text box supports questions about recent conditions and historical greenness. Include a region name (for example, `delta_gharbia`) and optionally a date in `YYYY-MM-DD` form. It cannot answer open-ended questions or predict yield, irrigation, crop suitability, pests, or disease.
+## Plant profile sources
 
-## Project layout
+The structured profiles in `data/knowledge/plant_profiles.json` cite [FAO EcoCrop tomato](https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=1379), [wheat](https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=2114), and [maize](https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=2175). The displayed temperature ranges are EcoCrop screening ranges, not local variety-specific setpoints. Annual rainfall ranges are not crop water requirements, particularly for irrigated farming.
 
-```text
-data/raw/          Downloaded NASA CSVs and study point list (source data)
-data/processed/    Reproducible cleaned and joined tables
-data/knowledge/    Structured plant profiles (unverified placeholders)
-src/               Loading, preparation, features, training, prediction, knowledge
-models/            Locally trained model and training climatology
-app/               Streamlit interface
-tests/             Small unit checks for core rule behavior
-```
+## Deployment
 
-## Data collection
+Push the app code and required runtime artifacts to the GitHub branch connected to Streamlit Community Cloud. For the model panel, include the trained `models/` artifacts and `data/processed/ndvi_weather_features.csv`; those files are ignored by default and must be explicitly included for deployment. Configure `OPENAI_API_KEY` in Streamlit Secrets if using the LLM.
 
-Use NASA POWER's daily Agroclimatology CSV export for each point with `T2M_MAX`, `T2M_MIN`, `PRECTOTCORR`, `ALLSKY_SFC_SW_DWN`, and `GWETROOT`. For NDVI, use AppEEARS Point Samples with `MOD13Q1.061`, `_250m_16_days_NDVI`, and `_250m_16_days_pixel_reliability`. Exact dates, labels, and filenames are in [`data/raw/README.md`](data/raw/README.md). Data collection is deliberately manual; API automation is a later improvement.
+## Limitations
 
-The study points are rough starting coordinates, not verified field locations. Inspect them on a satellite map before treating them as representative farmland. AppEEARS category labels must match the region IDs in `study_points.csv`.
-
-## Data integrity and limitations
-
-- Raw downloads are not edited; generated tables are written to `data/processed/`.
-- Short weather gaps (up to three daily values) are interpolated. Invalid weather rows and poor-quality or impossible NDVI values are excluded.
-- Weather inputs cover only the 32 days before each MODIS composite. No weather from the target period or future is used.
-- The model target is `ndvi_anomaly`: observed NDVI minus the region's median for the same composite day-of-year, computed from training years.
-- The model does not recommend crops, predict yield, schedule irrigation, diagnose disease, or support arbitrary coordinates.
-- The tree percentile spread is disagreement among trees, not a formal confidence interval.
-- Plant profiles intentionally contain no numeric recommendations. Fill them only with values verified against authoritative, locally relevant sources; keep `verified` false until checked and cite exact sources.
-- No trained model or performance claim is included before authentic source CSVs are supplied.
-
-## Evaluation before use
-
-Before treating this as an MVP, run the workflow with real data, record train/validation/test MAE and R², confirm the model beats the zero-anomaly and constant baselines on held-out years, and perform leave-one-region-out validation. The geographic diagnostic uses the available anomaly table and should be reported with its documented climatology limitation. Inspect missingness and each downloaded CSV's schema. Treat weak or negative performance as a valid result and do not deploy unsupported predictions.
-
-This repository is an educational prototype, not guaranteed agricultural advice. NASA data outages or absent source files are reported in the interface; this offline CSV version does not make live NASA calls.
-=======
-# sprout
->>>>>>> 3b15e5108ca2a9288b51e09e8810f776362d1e3e
+- Study coordinates are rough example points, not verified farm locations.
+- NASA POWER is regional data; it does not observe an individual field.
+- The MODIS label measures vegetation greenness, not crop yield.
+- Profile ranges are globally sourced and not locally validated for Egypt.
+- The model does not predict yield, recommend crops, schedule irrigation, diagnose pests/disease, or support arbitrary coordinates.
+- The LLM is constrained to explain supplied evidence and can still phrase that evidence imperfectly; verify important decisions independently.

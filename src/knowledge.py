@@ -9,16 +9,16 @@ def load_profiles(path="data/knowledge/plant_profiles.json"):
 
 def compare_to_profile(recent_weather: pd.DataFrame, profile: dict) -> list[str]:
     notes = []
-    bounds = profile.get("temp_optimal_c")
+    bounds = profile.get("optimal_mean_temp_c", profile.get("temp_optimal_c"))
     if bounds and {"T2M_MAX", "T2M_MIN"}.issubset(recent_weather.columns):
         lo, hi = bounds
-        max_t, min_t = recent_weather.T2M_MAX.mean(), recent_weather.T2M_MIN.mean()
-        if pd.notna(max_t) and max_t > hi:
-            notes.append(f"Recent daytime highs (average {max_t:.1f} °C) are above the documented range ({lo}–{hi} °C).")
-        if pd.notna(min_t) and min_t < lo - 8:
-            notes.append(f"Recent nights (average low {min_t:.1f} °C) are quite cool for this plant.")
+        mean_temp = ((recent_weather.T2M_MAX + recent_weather.T2M_MIN) / 2).mean()
+        if pd.notna(mean_temp) and mean_temp > hi:
+            notes.append(f"Recent mean air temperature ({mean_temp:.1f} °C) is above the cited ecological range ({lo}–{hi} °C).")
+        elif pd.notna(mean_temp) and mean_temp < lo:
+            notes.append(f"Recent mean air temperature ({mean_temp:.1f} °C) is below the cited ecological range ({lo}–{hi} °C).")
         if not notes:
-            notes.append("Recent temperatures fall within the profile's documented range.")
-    if not profile.get("verified", False):
-        notes.append("This plant profile has not been verified against a cited source.")
+            notes.append("Recent mean air temperature falls within the cited ecological range; this is not a crop suitability verdict.")
+    if not profile.get("locally_validated", False):
+        notes.append("This FAO profile has not been validated for the local cultivar, field, or management conditions.")
     return notes or ["No temperature comparison is available for this profile and data."]

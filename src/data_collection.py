@@ -15,7 +15,9 @@ def load_power_csv(path):
     path = Path(path)
     lines = path.read_text(encoding="utf-8-sig").splitlines()
     end = next((i for i, line in enumerate(lines) if "-END HEADER-" in line), -1)
-    df = pd.read_csv(path, skiprows=end + 1 if end >= 0 else 0, comment="-", encoding="utf-8-sig")
+    # The NASA metadata header is skipped explicitly. Do not use pandas'
+    # comment option here: it would truncate ISO dates at their hyphens.
+    df = pd.read_csv(path, skiprows=end + 1 if end >= 0 else 0, encoding="utf-8-sig")
     df.columns = [str(c).strip() for c in df.columns]
     if {"YEAR", "MO", "DY"}.issubset(df.columns):
         df["date"] = pd.to_datetime(dict(year=df.YEAR, month=df.MO, day=df.DY), errors="coerce")
@@ -35,7 +37,9 @@ def load_power_csv(path):
 def combine_power_files(raw_dir="data/raw", output="data/processed/power_daily_regions.csv"):
     frames = []
     for region in REGIONS:
-        path = Path(raw_dir) / f"power_{region}.csv"
+        api_path = Path(raw_dir) / "api_power" / f"power_{region}.csv"
+        manual_path = Path(raw_dir) / f"power_{region}.csv"
+        path = api_path if api_path.exists() else manual_path
         if path.exists():
             frame = load_power_csv(path)
             frame["region"] = region

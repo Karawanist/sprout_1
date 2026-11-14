@@ -3,6 +3,8 @@ numpy
 scikit-learn
 joblib
 streamlit
+requests>=2.31.0,<3
+openai>=3.51.0,<4
 matplotlib
 seaborn
 jupyter

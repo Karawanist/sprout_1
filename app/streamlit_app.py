@@ -1,5 +1,7 @@
 """Streamlit interface for the CSV-first Sprout prototype."""
 import sys
+import os
+from datetime import date, timedelta
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -9,10 +11,12 @@ import streamlit as st
 from src.knowledge import load_profiles, compare_to_profile
 from src.predict import predict_with_range
 from src.data_collection import REGIONS
+from src.power_api import fetch_region_power_daily
+from src.llm import rephrase_evidence
 
 st.set_page_config(page_title="Sprout", page_icon="🌱", layout="wide")
 st.title("🌱 Sprout")
-st.caption("Agricultural decision-support prototype using downloaded NASA CSV data. It supports decisions; it does not guarantee outcomes.")
+st.caption("Agricultural decision-support prototype using live NASA POWER data. It supports decisions; it does not guarantee outcomes.")
 st.info("NDVI is a satellite measure of vegetation greenness. It is not yield, crop type, irrigation need, or a field-level diagnosis.")
 
 try:
@@ -21,42 +25,89 @@ except (OSError, ValueError) as exc:
     st.error(f"Plant profile data could not be loaded: {exc}"); st.stop()
 weather_path = ROOT / "data/processed/power_daily_regions_clean.csv"
 try:
-    weather = pd.read_csv(weather_path, parse_dates=["date"])
-except FileNotFoundError:
-    st.warning("NASA POWER data is not ready yet. Add the regional CSVs described in `data/raw/README.md`, then run `python -m src.prepare_data`.")
-    st.stop()
-if weather.empty or "region" not in weather:
-    st.error("The processed weather file has no usable regional rows. Check the downloaded CSVs and rerun preparation."); st.stop()
+    local_weather = pd.read_csv(weather_path, parse_dates=["date"])
+except (FileNotFoundError, pd.errors.EmptyDataError, ValueError):
+    local_weather = pd.DataFrame()
 
 with st.sidebar:
     st.header("Study region")
-    region = st.selectbox("Region", sorted(weather.region.dropna().unique()))
+    region = st.selectbox("Region", sorted(REGIONS))
     days = st.slider("Recent period (days)", 14, 90, 30)
     crop = st.selectbox("Plant profile", list(profiles), format_func=lambda key: profiles[key]["display_name"])
 
-recent = weather[weather.region == region].sort_values("date").tail(days).set_index("date")
-if recent.empty:
-    st.warning("No weather observations are available for this region."); st.stop()
-st.caption(f"Showing {len(recent)} available daily observations through {recent.index.max().date()}. Update by downloading newer NASA POWER CSVs.")
+@st.cache_data(ttl=21600, show_spinner=False)
+def get_power_data(selected_region, first_day, last_day):
+    return fetch_region_power_daily(selected_region, first_day, last_day)
+
+end_day = date.today() - timedelta(days=2)
+start_day = end_day - timedelta(days=days - 1)
+api_warnings = []
+try:
+    weather, api_warnings = get_power_data(region, start_day, end_day)
+    weather_source = "live NASA POWER API"
+except Exception:
+    weather_source = "saved NASA POWER CSV fallback"
+    if not local_weather.empty and "region" in local_weather:
+        weather = local_weather[local_weather.region == region].copy()
+        weather = weather[weather.date >= pd.Timestamp(start_day)]
+    else:
+        weather = pd.DataFrame()
+    st.warning("The NASA POWER API is unavailable right now; Sprout will use saved weather data if available.")
+for warning in api_warnings:
+    st.caption(warning)
+
+if not weather.empty and "date" in weather:
+    recent = weather.sort_values("date").tail(days).set_index("date")
+else:
+    recent = pd.DataFrame()
+    st.warning("No weather observations are available for this region and period. The plant profile and model sections remain available.")
+if not recent.empty:
+    st.caption(f"Showing {len(recent)} daily observations through {recent.index.max().date()} from the {weather_source}.")
 left, right = st.columns(2)
 with left:
     st.subheader("NASA POWER observations")
     available = [c for c in ["T2M_MAX", "T2M_MIN"] if c in recent]
-    if available: st.line_chart(recent[available])
+    if not recent.empty and available:
+        st.line_chart(recent[available])
+    else:
+        st.caption("Temperature observations are unavailable.")
     if "PRECTOTCORR" in recent and recent.PRECTOTCORR.notna().any():
         st.bar_chart(recent["PRECTOTCORR"])
         st.write(f"Total precipitation: **{recent.PRECTOTCORR.sum():.1f} mm**.")
     else:
-        st.caption("Precipitation was not included in the downloaded POWER files.")
+        st.caption("Precipitation is unavailable for this period.")
     if "GWETROOT" in recent and recent.GWETROOT.notna().any():
         st.write(f"Average root-zone soil wetness index: **{recent.GWETROOT.mean():.2f}** (0 = dry, 1 = wet).")
     else:
-        st.caption("Root-zone soil wetness was not included in the downloaded POWER files.")
+        st.caption("Root-zone wetness is unavailable for this period.")
 with right:
     st.subheader(f"Profile comparison: {profiles[crop]['display_name']}")
     for note in compare_to_profile(recent.reset_index(), profiles[crop]): st.write(f"• {note}")
-    sources = profiles[crop].get("sources", [])
-    if sources: st.caption("Profile sources: " + "; ".join(sources))
+    profile = profiles[crop]
+    st.write(f"Scientific name: *{profile.get('scientific_name', 'not listed')}*")
+    if profile.get("optimal_mean_temp_c"):
+        st.write(f"FAO EcoCrop optimal ecological temperature range: {profile['optimal_mean_temp_c'][0]}–{profile['optimal_mean_temp_c'][1]} °C.")
+    st.caption("These global profile ranges are not locally validated crop recommendations; rainfall ranges are not irrigation requirements.")
+    with st.expander(f"More {profile['display_name']} profile details"):
+        if profile.get("annual_rainfall_optimal_mm"):
+            lo, hi = profile["annual_rainfall_optimal_mm"]
+            st.write(f"FAO EcoCrop annual rainfall screening range: {lo}–{hi} mm/year. This is not an irrigation requirement.")
+        if profile.get("soil_ph_optimal"):
+            lo, hi = profile["soil_ph_optimal"]
+            st.write(f"Soil pH screening range: {lo}–{hi}.")
+        soil_values = [f"{key.replace('_', ' ').title()}: {value}" for key, value in profile.get("soil", {}).items() if value]
+        if soil_values:
+            st.write("Soil profile: " + "; ".join(soil_values) + ".")
+        if profile.get("crop_cycle_days"):
+            lo, hi = profile["crop_cycle_days"]
+            st.write(f"Listed crop-cycle range: {lo}–{hi} days; actual cultivar and season vary.")
+        for note in profile.get("notes", []):
+            st.write(f"• {note}")
+    sources = profile.get("sources", [])
+    if sources:
+        st.markdown("**Profile source**")
+        for source in sources:
+            st.markdown(f"- [{source['label']}]({source['url']})")
 
 st.subheader("Model: vegetation greenness vs. normal")
 model_path, table_path, clim_path = ROOT / "models/sprout_rf_v1.joblib", ROOT / "data/processed/ndvi_weather_features.csv", ROOT / "models/ndvi_climatology.csv"
@@ -90,7 +141,19 @@ with st.expander("What Sprout cannot tell you"):
     st.write("This prototype does not predict yield, crop suitability, irrigation schedules, pests, disease, field conditions, or locations beyond its Egyptian study regions. NASA POWER is coarse regional data, and most study farmland is irrigated, so weather may explain only a modest share of greenness changes. Consult a local agricultural advisor.")
 
 st.subheader("Ask Sprout")
-st.caption("Ask about recent conditions or a supported historical greenness estimate. Sprout uses fixed, transparent rules here; it does not provide open-ended agricultural advice.")
+st.caption("Ask about recent conditions, sourced plant profiles, or supported historical greenness. The optional LLM only rephrases Sprout's computed evidence; it does not provide independent agricultural facts.")
+try:
+    openai_key = st.secrets.get("OPENAI_API_KEY", "") or os.environ.get("OPENAI_API_KEY", "")
+    openai_model = st.secrets.get("OPENAI_MODEL", "gpt-6-astra") or os.environ.get("OPENAI_MODEL", "gpt-6-astra")
+except Exception:
+    openai_key = os.environ.get("OPENAI_API_KEY", "")
+    openai_model = os.environ.get("OPENAI_MODEL", "gpt-6-astra")
+use_llm = False
+if openai_key:
+    use_llm = st.checkbox("Use OpenAI to phrase responses", value=False)
+    st.caption("When enabled, Sprout sends your question and computed answer evidence to OpenAI. Avoid personal or sensitive information; API usage may incur charges.")
+else:
+    st.caption("OpenAI phrasing is off. Add OPENAI_API_KEY to local environment or Streamlit Secrets to enable it.")
 if "sprout_messages" not in st.session_state:
     st.session_state.sprout_messages = []
 for message in st.session_state.sprout_messages:
@@ -110,9 +173,11 @@ def answer_question(question: str) -> str:
         if name in q or readable in q:
             chosen_region = name
             break
+    if weather.empty or not {"region", "date"}.issubset(weather.columns):
+        return "I don't have live or saved NASA POWER observations right now. Please try again when the data source is available."
     subset_weather = weather[weather.region == chosen_region].sort_values("date")
     if subset_weather.empty:
-        return f"I don't have weather observations for {chosen_region}. Choose one of the five study regions."
+        return f"I don't currently have live or saved weather observations for {chosen_region}. Check the NASA POWER connection and try again."
 
     crop_key = crop
     for key, profile in profiles.items():
@@ -155,15 +220,36 @@ def answer_question(question: str) -> str:
     if "PRECTOTCORR" in latest and latest.PRECTOTCORR.notna().any():
         summary += f" Total precipitation: {latest.PRECTOTCORR.sum():.1f} mm."
     else:
-        summary += " Precipitation is not present in the downloaded POWER files."
+        summary += " Precipitation is unavailable in the current NASA POWER response."
     if any(term in q for term in ("plant", "crop", "tomato", "wheat", "maize", "profile")):
         notes = compare_to_profile(latest, profiles[crop_key])
         summary += " Profile notes for " + profiles[crop_key]["display_name"] + ": " + " ".join(notes)
+        profile = profiles[crop_key]
+        if profile.get("optimal_mean_temp_c"):
+            lo, hi = profile["optimal_mean_temp_c"]
+            summary += f" FAO EcoCrop ecological mean-temperature range: {lo}–{hi} °C."
+        if profile.get("annual_rainfall_optimal_mm"):
+            lo, hi = profile["annual_rainfall_optimal_mm"]
+            summary += f" FAO EcoCrop annual rainfall screening range: {lo}–{hi} mm/year; this is not irrigation guidance."
+        if profile.get("soil_ph_optimal"):
+            lo, hi = profile["soil_ph_optimal"]
+            summary += f" FAO EcoCrop soil pH screening range: {lo}–{hi}."
+        if profile.get("notes"):
+            summary += " " + " ".join(profile["notes"])
+        source = profiles[crop_key].get("sources", [{}])[0]
+        if source.get("url"):
+            summary += f" Profile source: {source['label']} ({source['url']})."
+        summary += " Profile data is global and not locally validated for Egyptian cultivars or management."
     summary += " POWER is regional data, not a measurement of an individual field."
     return summary
 
 if question := st.chat_input("Ask about recent conditions or historical greenness…"):
     st.session_state.sprout_messages.append({"role": "user", "content": question})
     response = answer_question(question)
+    if use_llm:
+        try:
+            response = rephrase_evidence(question, response, openai_key, openai_model)
+        except Exception:
+            response += "\n\n(OpenAI phrasing is unavailable right now; this answer uses Sprout's rule-based response.)"
     st.session_state.sprout_messages.append({"role": "assistant", "content": response})
     st.rerun()

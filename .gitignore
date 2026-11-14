@@ -4,8 +4,10 @@ __pycache__/
 *.py[cod]
 .ipynb_checkpoints/
 .env
+.streamlit/secrets.toml
 data/processed/*
 !data/processed/.gitkeep
+data/raw/api_power/
 models/*.joblib
 models/*.csv
 !models/.gitkeep

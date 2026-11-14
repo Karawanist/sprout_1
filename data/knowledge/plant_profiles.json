@@ -1,38 +1,80 @@
 {
   "tomato": {
     "display_name": "Tomato",
-    "temp_optimal_c": null,
-    "temp_min_survival_c": null,
-    "water_need": null,
-    "soil": null,
-    "season_notes": null,
-    "risks": [],
-    "sources": [],
-    "verified": false,
-    "profile_note": "No agronomic thresholds have been entered; do not use this profile as crop advice."
+    "scientific_name": "Solanum lycopersicum (listed by FAO EcoCrop as Lycopersicon esculentum)",
+    "ecocrop_id": 1379,
+    "optimal_mean_temp_c": [20, 27],
+    "absolute_temp_c": [7, 35],
+    "annual_rainfall_optimal_mm": [600, 1300],
+    "soil_ph_optimal": [5.5, 6.8],
+    "soil": {
+      "depth": "shallow (20–50 cm)",
+      "texture": "medium, organic",
+      "fertility": "high",
+      "salinity": "low (<4 dS/m)",
+      "drainage": "well drained; dry spells noted"
+    },
+    "crop_cycle_days": [70, 150],
+    "notes": [
+      "FAO EcoCrop notes that hot, dry winds may cause flower drop and reduced yields.",
+      "The listed ranges are global ecological screening ranges, not Egyptian cultivar recommendations."
+    ],
+    "sources": [
+      {"label": "FAO EcoCrop data sheet — tomato (ID 1379)", "url": "https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=1379"}
+    ],
+    "source_verified": true,
+    "locally_validated": false
   },
   "wheat": {
     "display_name": "Wheat",
-    "temp_optimal_c": null,
-    "temp_min_survival_c": null,
-    "water_need": null,
-    "soil": null,
-    "season_notes": null,
-    "risks": [],
-    "sources": [],
-    "verified": false,
-    "profile_note": "No agronomic thresholds have been entered; do not use this profile as crop advice."
+    "scientific_name": "Triticum aestivum",
+    "ecocrop_id": 2114,
+    "optimal_mean_temp_c": [15, 23],
+    "absolute_temp_c": [5, 27],
+    "annual_rainfall_optimal_mm": [750, 900],
+    "soil_ph_optimal": [6, 7],
+    "soil": {
+      "depth": "medium (50–150 cm)",
+      "texture": "medium, organic",
+      "fertility": "high",
+      "salinity": "low (<4 dS/m)",
+      "drainage": "well drained; dry spells noted"
+    },
+    "crop_cycle_days": [90, 250],
+    "notes": [
+      "FAO EcoCrop describes both spring and winter wheat; cycle length depends on cultivar and sowing season.",
+      "The listed ranges are global ecological screening ranges, not Egyptian cultivar recommendations."
+    ],
+    "sources": [
+      {"label": "FAO EcoCrop data sheet — common wheat (ID 2114)", "url": "https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=2114"}
+    ],
+    "source_verified": true,
+    "locally_validated": false
   },
   "maize": {
     "display_name": "Maize",
-    "temp_optimal_c": null,
-    "temp_min_survival_c": null,
-    "water_need": null,
-    "soil": null,
-    "season_notes": null,
-    "risks": [],
-    "sources": [],
-    "verified": false,
-    "profile_note": "No agronomic thresholds have been entered; do not use this profile as crop advice."
+    "scientific_name": "Zea mays",
+    "ecocrop_id": 2175,
+    "optimal_mean_temp_c": [18, 33],
+    "absolute_temp_c": [10, 47],
+    "annual_rainfall_optimal_mm": [600, 1200],
+    "soil_ph_optimal": [5, 7],
+    "soil": {
+      "depth": "medium (50–150 cm)",
+      "texture": null,
+      "fertility": "high",
+      "salinity": "low (<4 dS/m)",
+      "drainage": null
+    },
+    "crop_cycle_days": [65, 365],
+    "notes": [
+      "FAO EcoCrop notes that hot, dry winds may reduce pollen available for fertilization.",
+      "The listed ranges are global ecological screening ranges, not Egyptian cultivar recommendations."
+    ],
+    "sources": [
+      {"label": "FAO EcoCrop data sheet — maize (ID 2175)", "url": "https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=2175"}
+    ],
+    "source_verified": true,
+    "locally_validated": false
   }
 }
