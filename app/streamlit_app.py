@@ -12,7 +12,7 @@ from src.knowledge import load_profiles, compare_to_profile
 from src.predict import predict_with_range
 from src.data_collection import REGIONS
 from src.power_api import fetch_region_power_daily
-from src.llm import answer_from_web, rephrase_evidence, rephrase_with_ollama, search_ollama_web
+from src.llm import rephrase_evidence, rephrase_with_ollama
 
 st.set_page_config(page_title="Sprout", page_icon="🌱", layout="wide")
 st.title("🌱 Sprout")
@@ -157,10 +157,10 @@ with st.expander("Data and reference sources"):
     )
     st.caption("EcoCrop ranges are global screening references, not locally validated crop recommendations. Study-point coordinates are example points listed in data/raw/study_points.csv.")
     st.markdown("### 💬 Local language model")
-    st.markdown("- [Ollama](https://ollama.com/) runs the optional `llama3.2:3b` model locally or a configured hosted model for Streamlit Cloud. Optional current web results come from [Ollama Web Search](https://docs.ollama.com/capabilities/web-search); retrieved links appear with the answer. The model is not itself a source for weather or crop-profile facts.")
+    st.markdown("- [Ollama](https://ollama.com/) runs the optional `llama3.2:3b` model locally or a configured hosted model for Streamlit Cloud. The model only rephrases Sprout's data-backed answer; it is not a source for weather or crop-profile facts.")
 
 st.subheader("Ask Sprout")
-st.caption("Ask about recent conditions, sourced plant profiles, or historical greenness. Enable web search for broader, source-linked answers using current online results.")
+st.caption("Ask about recent conditions, sourced plant profiles, or historical greenness. The optional model only rephrases Sprout's data-backed answer.")
 try:
     ollama_model = st.secrets.get("OLLAMA_MODEL", "llama3.2:3b") or os.environ.get("OLLAMA_MODEL", "llama3.2:3b")
     ollama_base_url = st.secrets.get("OLLAMA_BASE_URL", "http://localhost:11434") or os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -194,23 +194,11 @@ elif selected_provider == "Ollama Cloud (hosted)":
 elif selected_provider == "OpenAI":
     active_ollama_model, active_ollama_url = ollama_model, ollama_base_url
     st.caption("When enabled, Sprout sends your question and computed answer evidence to OpenAI. Avoid personal or sensitive information; API usage may incur charges.")
-if selected_provider in ("Ollama (local)", "Ollama Cloud (hosted)") and use_llm:
-    use_web_search = st.checkbox("Search the web for a broader, sourced answer", value=False, disabled=not bool(ollama_api_key))
-    if ollama_api_key:
-        st.caption("When enabled, your question goes to Ollama's hosted web search and retrieved snippets go to the selected model. The free search tier has usage limits.")
-    else:
-        st.caption("To enable web search, create a free [Ollama API key](https://ollama.com/settings/keys), add `OLLAMA_API_KEY = \"your-key\"` to local `.streamlit/secrets.toml` or Streamlit Cloud Secrets, then restart the app.")
-else:
-    use_web_search = False
 if "sprout_messages" not in st.session_state:
     st.session_state.sprout_messages = []
 for message in st.session_state.sprout_messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
-        if message.get("sources"):
-            with st.expander("Web sources"):
-                for index, source in enumerate(message["sources"], 1):
-                    st.link_button(f"[{index}] {source['title'][:90]}", source["url"])
 
 def answer_question(question: str) -> str:
     q = question.lower()
@@ -297,26 +285,14 @@ def answer_question(question: str) -> str:
 
 if question := st.chat_input("Ask about recent conditions or historical greenness…"):
     st.session_state.sprout_messages.append({"role": "user", "content": question})
-    web_sources = []
-    if use_llm and selected_provider in ("Ollama (local)", "Ollama Cloud (hosted)") and use_web_search:
+    response = answer_question(question)
+    if use_llm:
         try:
-            web_sources = search_ollama_web(question, ollama_api_key)
-            if web_sources:
-                response = answer_from_web(question, web_sources, active_ollama_model, active_ollama_url, ollama_api_key)
+            if selected_provider in ("Ollama (local)", "Ollama Cloud (hosted)"):
+                response = rephrase_with_ollama(question, response, active_ollama_model, active_ollama_url, ollama_api_key)
             else:
-                response = "The web search returned no usable sources. Try rephrasing your question."
-        except Exception as exc:
-            safe_error = str(exc).replace(ollama_api_key, "[hidden]")[:240] if ollama_api_key else str(exc)[:240]
-            response = (answer_question(question) + f"\n\n(Web search failed: {safe_error}. This is Sprout's local evidence-based response.)")
-    else:
-        response = answer_question(question)
-        if use_llm:
-            try:
-                if selected_provider in ("Ollama (local)", "Ollama Cloud (hosted)"):
-                    response = rephrase_with_ollama(question, response, active_ollama_model, active_ollama_url, ollama_api_key)
-                else:
-                    response = rephrase_evidence(question, response, openai_key, openai_model)
-            except Exception:
-                response += f"\n\n({selected_provider} phrasing is unavailable; this answer uses Sprout's rule-based response.)"
-    st.session_state.sprout_messages.append({"role": "assistant", "content": response, "sources": web_sources})
+                response = rephrase_evidence(question, response, openai_key, openai_model)
+        except Exception:
+            response += f"\n\n({selected_provider} phrasing is unavailable; this answer uses Sprout's rule-based response.)"
+    st.session_state.sprout_messages.append({"role": "assistant", "content": response})
     st.rerun()

@@ -73,14 +73,6 @@ OLLAMA_MODEL = "llama3.2:3b"
 OLLAMA_BASE_URL = "http://localhost:11434"
 ```
 
-To answer broader questions using current web results, create a free Ollama account and API key at [Ollama API keys](https://ollama.com/settings/keys), then add this to the same ignored local secrets file:
-
-```toml
-OLLAMA_API_KEY = "your-key"
-```
-
-Restart Sprout, enable **Use LLM to phrase responses**, then enable **Search the web for a broader, sourced answer**. Sprout sends the question to Ollama's hosted web-search service and passes the returned snippets to your local Ollama model for a conversational, source-linked summary. The free account has usage limits; higher limits are available through Ollama subscriptions. Avoid entering personal or sensitive information. Search uses snippets and does not automatically read full web pages. See [Ollama web-search documentation](https://docs.ollama.com/capabilities/web-search).
-
 This local setup is for a Sprout process running on the same computer as Ollama. A Streamlit Community Cloud app cannot reach Ollama running on your personal computer. Each person can run Sprout and Ollama locally, or you would need to host an Ollama server somewhere accessible to the app.
 
 ### Use Ollama in Streamlit Community Cloud
@@ -109,7 +101,7 @@ Never commit the key to GitHub. Without a key, the app keeps using its determini
 .venv\Scripts\streamlit.exe run app/streamlit_app.py
 ```
 
-The text box accepts plain-language questions. Without web search, answers are limited to loaded Sprout evidence; web mode adds current search snippets and visible links. The LLM is not a substitute for local agronomic advice.
+The text box accepts plain-language questions, but answers are limited to loaded Sprout evidence. The LLM is not a substitute for local agronomic advice.
 
 ## Data and reference sources
 
@@ -124,7 +116,7 @@ The text box accepts plain-language questions. Without web search, answers are l
 
 Structured profiles in `data/knowledge/plant_profiles.json` cite [FAO EcoCrop tomato](https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=1379), [common wheat](https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=2114), and [maize](https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=2175). These are global screening ranges, not locally validated recommendations or variety-specific setpoints. Annual rainfall ranges are not crop water requirements, particularly for irrigated farming.
 
-The five study coordinates are project example points stored in `data/raw/study_points.csv`, not an externally validated set of farm locations. The optional language model is [Ollama](https://ollama.com/) running `llama3.2:3b` locally or a configured hosted Ollama model; it is not a source of agronomic or weather facts. Optional web search uses [Ollama Web Search](https://docs.ollama.com/capabilities/web-search), with retrieved links shown alongside the answer.
+The five study coordinates are project example points stored in `data/raw/study_points.csv`, not an externally validated set of farm locations. The optional language model is [Ollama](https://ollama.com/) running `llama3.2:3b` locally or a configured hosted Ollama model; it only rephrases Sprout evidence and is not a source of agronomic or weather facts.
 
 ## Deployment
 
