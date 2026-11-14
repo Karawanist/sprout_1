@@ -8,7 +8,7 @@ Sprout is an Egypt-focused agricultural decision-support prototype. It combines 
 - Download historical weather, including precipitation and root-zone wetness, for model preparation.
 - Compare recent mean air temperature with FAO EcoCrop's global ecological ranges for tomato, wheat, and maize. Profiles are source-cited but not validated for Egyptian cultivars, fields, or management.
 - Train a Random Forest to estimate historical vegetation greenness anomaly from the preceding 32 days of weather, after authentic MODIS NDVI observations are supplied.
-- Use the chat box to answer from the available weather, profile, and model evidence. Optional Gemini (free tier) or OpenAI can phrase answers using only that evidence.
+- Use the chat box to answer from the available weather, profile, and model evidence. A local Ollama model or optional OpenAI can phrase answers using only that evidence.
 
 NDVI is a satellite-derived greenness measure. It is not yield, crop type, field condition, crop suitability, or irrigation need. POWER's weather and wetness values have different source resolutions. Consult local agricultural experts before making important decisions.
 
@@ -55,18 +55,25 @@ After both the full POWER history and NDVI file are present:
 
 The model predicts `ndvi_anomaly`: observed NDVI minus a training-years-only regional seasonal baseline. It is a historical estimate for the study regions, not a yield or forecast model. Report metrics honestly; do not present a predictive capability unless it beats the baselines on held-out years.
 
-## Optional LLM (Gemini free tier or OpenAI)
+## Optional local LLM with Ollama
 
-The LLM is optional and only rewrites the answer constructed from NASA and plant-profile evidence. It does not search for facts, invent crop advice, or change model values. Gemini is the suggested no-cost-to-start option; Google currently offers a free tier with model-specific usage limits. Free-tier content may be used to improve Google's products. Avoid entering personal or sensitive information. Review [current Gemini API pricing and limits](https://ai.google.dev/gemini-api/docs/pricing).
+The LLM is optional and only rewrites the answer constructed from NASA and plant-profile evidence. It does not search for facts, invent crop advice, or change model values. Ollama runs the model on the computer where Sprout is running, so no API key or per-request API billing is needed.
 
-Create a Gemini API key in [Google AI Studio](https://aistudio.google.com/apikey). For local use, create `.streamlit/secrets.toml` (this file is ignored by Git):
+Install [Ollama for Windows](https://ollama.com/download), then open PowerShell and download a small starter model:
 
-```toml
-GEMINI_API_KEY = "your-key"
-GEMINI_MODEL = "gemini-2.5-flash-lite"
+```powershell
+ollama pull llama3.2:3b
+ollama list
 ```
 
-For Streamlit Community Cloud, open **Manage app → Settings → Secrets** and add the same two lines. Then select **Gemini (free tier)** and enable **Use LLM to phrase responses** in the app.
+Keep the Ollama app/server running, start Sprout, then select **Ollama (local)** and enable **Use LLM to phrase responses**. The defaults are `llama3.2:3b` and `http://localhost:11434`. Optional overrides can be set in `.streamlit/secrets.toml`:
+
+```toml
+OLLAMA_MODEL = "llama3.2:3b"
+OLLAMA_BASE_URL = "http://localhost:11434"
+```
+
+This local setup is for a Sprout process running on the same computer as Ollama. A Streamlit Community Cloud app cannot reach Ollama running on your personal computer. Each person can run Sprout and Ollama locally, or you would need to host an Ollama server somewhere accessible to the app.
 
 OpenAI remains available if configured; it uses the Responses API and may incur charges:
 
@@ -85,13 +92,24 @@ Never commit the key to GitHub. Without a key, the app keeps using its determini
 
 The text box accepts plain-language questions, but answers are limited to the loaded evidence. The LLM is not a substitute for local agronomic advice.
 
-## Plant profile sources
+## Data and reference sources
 
-The structured profiles in `data/knowledge/plant_profiles.json` cite [FAO EcoCrop tomato](https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=1379), [wheat](https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=2114), and [maize](https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=2175). The displayed temperature ranges are EcoCrop screening ranges, not local variety-specific setpoints. Annual rainfall ranges are not crop water requirements, particularly for irrigated farming.
+### 🛰️ NASA sources
+
+- [NASA POWER Daily API](https://power.larc.nasa.gov/docs/services/api/temporal/daily/) — recent live and historical daily weather for the five example study points. Sprout requests maximum/minimum air temperature, corrected precipitation, all-sky surface shortwave radiation, and root-zone wetness.
+- [NASA POWER hydrology data notes](https://power.larc.nasa.gov/docs/methodology/data/sources_hydrology/) — background and resolution notes for the `GWETROOT` root-zone wetness field.
+- [NASA AppEEARS](https://appeears.earthdatacloud.nasa.gov/) — point-sample service used to obtain the optional historical satellite CSV.
+- [NASA/USGS MODIS MOD13Q1.061 product](https://lpdaac.usgs.gov/products/mod13q1v061/) — 250 m, 16-day vegetation indices. Sprout uses NDVI and pixel-reliability information when preparing its historical model data.
+
+### 🌾 Plant profile source
+
+Structured profiles in `data/knowledge/plant_profiles.json` cite [FAO EcoCrop tomato](https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=1379), [common wheat](https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=2114), and [maize](https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=2175). These are global screening ranges, not locally validated recommendations or variety-specific setpoints. Annual rainfall ranges are not crop water requirements, particularly for irrigated farming.
+
+The five study coordinates are project example points stored in `data/raw/study_points.csv`, not an externally validated set of farm locations. The optional language model is [Ollama](https://ollama.com/) running `llama3.2:3b` locally; it only rephrases evidence supplied by Sprout and is not a source of agronomic or weather facts.
 
 ## Deployment
 
-Push the app code and required runtime artifacts to the GitHub branch connected to Streamlit Community Cloud. For the model panel, include the trained `models/` artifacts and `data/processed/ndvi_weather_features.csv`; those files are ignored by default and must be explicitly included for deployment. Configure `GEMINI_API_KEY` or `OPENAI_API_KEY` in Streamlit Secrets if using the LLM.
+Push the app code and required runtime artifacts to the GitHub branch connected to Streamlit Community Cloud. For the model panel, include the trained `models/` artifacts and `data/processed/ndvi_weather_features.csv`; those files are ignored by default and must be explicitly included for deployment. The Ollama option only works in deployments that can reach an Ollama server; configure `OPENAI_API_KEY` in Streamlit Secrets if using OpenAI.
 
 ## Limitations
 

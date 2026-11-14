@@ -12,7 +12,7 @@ from src.knowledge import load_profiles, compare_to_profile
 from src.predict import predict_with_range
 from src.data_collection import REGIONS
 from src.power_api import fetch_region_power_daily
-from src.llm import rephrase_evidence, rephrase_with_gemini
+from src.llm import rephrase_evidence, rephrase_with_ollama
 
 st.set_page_config(page_title="Sprout", page_icon="🌱", layout="wide")
 st.title("🌱 Sprout")
@@ -140,31 +140,47 @@ else:
 with st.expander("What Sprout cannot tell you"):
     st.write("This prototype does not predict yield, crop suitability, irrigation schedules, pests, disease, field conditions, or locations beyond its Egyptian study regions. NASA POWER is coarse regional data, and most study farmland is irrigated, so weather may explain only a modest share of greenness changes. Consult a local agricultural advisor.")
 
+with st.expander("Data and reference sources"):
+    st.markdown("### 🛰️ NASA sources")
+    st.info("NASA datasets power Sprout's weather charts and, when MODIS data is supplied, its historical vegetation-greenness model.")
+    st.markdown(
+        "- [NASA POWER Daily API](https://power.larc.nasa.gov/docs/services/api/temporal/daily/) — recent live and historical daily weather at the five example study points. Sprout requests maximum/minimum air temperature, corrected precipitation, all-sky surface shortwave radiation, and root-zone wetness. "
+        "\n- [NASA POWER hydrology data notes](https://power.larc.nasa.gov/docs/methodology/data/sources_hydrology/) — background and resolution notes for `GWETROOT` root-zone wetness. "
+        "\n- [NASA AppEEARS](https://appeears.earthdatacloud.nasa.gov/) — point-sample service used to obtain the optional historical satellite CSV. "
+        "\n- [NASA/USGS MODIS MOD13Q1.061 product](https://lpdaac.usgs.gov/products/mod13q1v061/) — 250 m, 16-day vegetation indices; Sprout uses NDVI and pixel-reliability information when preparing model data."
+    )
+    st.markdown("### 🌾 Plant profile source")
+    st.markdown(
+        "- [FAO EcoCrop tomato](https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=1379) "
+        "\n- [FAO EcoCrop common wheat](https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=2114) "
+        "\n- [FAO EcoCrop maize](https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=2175)"
+    )
+    st.caption("EcoCrop ranges are global screening references, not locally validated crop recommendations. Study-point coordinates are example points listed in data/raw/study_points.csv.")
+    st.markdown("### 💬 Local language model")
+    st.markdown("- [Ollama](https://ollama.com/) runs the optional `llama3.2:3b` phrasing model on the computer hosting Sprout. The model only rewrites the data-backed answer; it is not a source for weather or crop-profile facts.")
+
 st.subheader("Ask Sprout")
 st.caption("Ask about recent conditions, sourced plant profiles, or supported historical greenness. The optional LLM only rephrases Sprout's computed evidence; it does not provide independent agricultural facts.")
 try:
-    gemini_key = st.secrets.get("GEMINI_API_KEY", "") or os.environ.get("GEMINI_API_KEY", "")
-    gemini_model = st.secrets.get("GEMINI_MODEL", "gemini-2.5-flash-lite") or os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
+    ollama_model = st.secrets.get("OLLAMA_MODEL", "llama3.2:3b") or os.environ.get("OLLAMA_MODEL", "llama3.2:3b")
+    ollama_base_url = st.secrets.get("OLLAMA_BASE_URL", "http://localhost:11434") or os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
     openai_key = st.secrets.get("OPENAI_API_KEY", "") or os.environ.get("OPENAI_API_KEY", "")
     openai_model = st.secrets.get("OPENAI_MODEL", "gpt-6-astra") or os.environ.get("OPENAI_MODEL", "gpt-6-astra")
 except Exception:
-    gemini_key = os.environ.get("GEMINI_API_KEY", "")
-    gemini_model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
+    ollama_model = os.environ.get("OLLAMA_MODEL", "llama3.2:3b")
+    ollama_base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
     openai_key = os.environ.get("OPENAI_API_KEY", "")
     openai_model = os.environ.get("OPENAI_MODEL", "gpt-6-astra")
-providers = []
-if gemini_key:
-    providers.append("Gemini (free tier)")
+providers = ["Ollama (local)"]
 if openai_key:
     providers.append("OpenAI")
-selected_provider = st.selectbox("Optional LLM provider", providers, index=0) if providers else None
+selected_provider = st.selectbox("Optional LLM provider", providers, index=0)
 use_llm = bool(selected_provider and st.checkbox("Use LLM to phrase responses", value=False))
-if selected_provider == "Gemini (free tier)":
-    st.caption("Gemini's free tier has usage limits and Google may use free-tier content to improve products. Avoid personal or sensitive information.")
+if selected_provider == "Ollama (local)":
+    st.caption(f"Runs locally through Ollama ({ollama_model}); no API key or per-request API charge. Ollama must be running on the same computer as this app.")
+    st.markdown("New to Ollama? [Download Ollama](https://ollama.com/download), install it, then run `ollama pull llama3.2:3b` in PowerShell. Each person running Sprout locally needs Ollama installed on their computer.")
 elif selected_provider == "OpenAI":
     st.caption("When enabled, Sprout sends your question and computed answer evidence to OpenAI. Avoid personal or sensitive information; API usage may incur charges.")
-else:
-    st.caption("LLM phrasing is off. Add GEMINI_API_KEY (free-tier option) or OPENAI_API_KEY to local environment or Streamlit Secrets to enable it.")
 if "sprout_messages" not in st.session_state:
     st.session_state.sprout_messages = []
 for message in st.session_state.sprout_messages:
@@ -259,11 +275,11 @@ if question := st.chat_input("Ask about recent conditions or historical greennes
     response = answer_question(question)
     if use_llm:
         try:
-            if selected_provider == "Gemini (free tier)":
-                response = rephrase_with_gemini(question, response, gemini_key, gemini_model)
+            if selected_provider == "Ollama (local)":
+                response = rephrase_with_ollama(question, response, ollama_model, ollama_base_url)
             else:
                 response = rephrase_evidence(question, response, openai_key, openai_model)
         except Exception:
-            response += f"\n\n({selected_provider} phrasing is unavailable right now; this answer uses Sprout's rule-based response.)"
+            response += f"\n\n({selected_provider} phrasing is unavailable. For Ollama, start the Ollama app and ensure `{ollama_model}` is installed; this answer uses Sprout's rule-based response.)"
     st.session_state.sprout_messages.append({"role": "assistant", "content": response})
     st.rerun()
