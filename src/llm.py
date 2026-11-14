@@ -1,7 +1,6 @@
 """Optional LLM phrasing grounded in computed Sprout evidence."""
 from openai import OpenAI
 import requests
-from urllib.parse import urlparse
 
 INSTRUCTIONS = """You are Sprout's wording assistant. Rewrite the supplied Sprout evidence in clear, concise language.
 Use only facts explicitly present in the evidence. Do not add agricultural recommendations, diagnoses, causes,
@@ -28,14 +27,10 @@ def rephrase_evidence(question: str, evidence: str, api_key: str, model: str = "
 
 def rephrase_with_ollama(question: str, evidence: str,
                          model: str = "llama3.2:3b",
-                         base_url: str = "http://localhost:11434",
-                         api_key: str = "") -> str:
+                         base_url: str = "http://localhost:11434") -> str:
     """Use a local Ollama server to phrase supplied evidence only."""
-    host = urlparse(base_url).hostname
-    headers = {"Authorization": f"Bearer {api_key}"} if api_key and host == "ollama.com" else {}
     response = requests.post(
         f"{base_url.rstrip('/')}/api/chat",
-        headers=headers,
         json={
             "model": model,
             "stream": False,

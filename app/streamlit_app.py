@@ -157,42 +157,29 @@ with st.expander("Data and reference sources"):
     )
     st.caption("EcoCrop ranges are global screening references, not locally validated crop recommendations. Study-point coordinates are example points listed in data/raw/study_points.csv.")
     st.markdown("### 💬 Local language model")
-    st.markdown("- [Ollama](https://ollama.com/) runs the optional `llama3.2:3b` model locally or a configured hosted model for Streamlit Cloud. The model only rephrases Sprout's data-backed answer; it is not a source for weather or crop-profile facts.")
+    st.markdown("- [Ollama](https://ollama.com/) runs the optional `llama3.2:3b` phrasing model on the computer hosting Sprout. The model only rephrases the data-backed answer; it is not a source for weather or crop-profile facts.")
 
 st.subheader("Ask Sprout")
 st.caption("Ask about recent conditions, sourced plant profiles, or historical greenness. The optional model only rephrases Sprout's data-backed answer.")
 try:
     ollama_model = st.secrets.get("OLLAMA_MODEL", "llama3.2:3b") or os.environ.get("OLLAMA_MODEL", "llama3.2:3b")
     ollama_base_url = st.secrets.get("OLLAMA_BASE_URL", "http://localhost:11434") or os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-    ollama_api_key = st.secrets.get("OLLAMA_API_KEY", "") or os.environ.get("OLLAMA_API_KEY", "")
-    ollama_cloud_model = st.secrets.get("OLLAMA_CLOUD_MODEL", "gpt-oss:20b-cloud") or os.environ.get("OLLAMA_CLOUD_MODEL", "gpt-oss:20b-cloud")
     openai_key = st.secrets.get("OPENAI_API_KEY", "") or os.environ.get("OPENAI_API_KEY", "")
     openai_model = st.secrets.get("OPENAI_MODEL", "gpt-6-astra") or os.environ.get("OPENAI_MODEL", "gpt-6-astra")
 except Exception:
     ollama_model = os.environ.get("OLLAMA_MODEL", "llama3.2:3b")
     ollama_base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-    ollama_api_key = os.environ.get("OLLAMA_API_KEY", "")
-    ollama_cloud_model = os.environ.get("OLLAMA_CLOUD_MODEL", "gpt-oss:20b-cloud")
     openai_key = os.environ.get("OPENAI_API_KEY", "")
     openai_model = os.environ.get("OPENAI_MODEL", "gpt-6-astra")
 providers = ["Ollama (local)"]
-if ollama_api_key:
-    providers.append("Ollama Cloud (hosted)")
 if openai_key:
     providers.append("OpenAI")
-default_provider_index = 1 if ollama_api_key else 0
-selected_provider = st.selectbox("Optional LLM provider", providers, index=default_provider_index)
+selected_provider = st.selectbox("Optional LLM provider", providers, index=0)
 use_llm = bool(selected_provider and st.checkbox("Use LLM to phrase responses", value=False))
 if selected_provider == "Ollama (local)":
     st.caption(f"Runs locally through Ollama ({ollama_model}); no API key or per-request API charge. Ollama must be running on the same computer as this app.")
     st.markdown("New to Ollama? [Download Ollama](https://ollama.com/download), install it, then run `ollama pull llama3.2:3b` in PowerShell. Each person running Sprout locally needs Ollama installed on their computer.")
-    active_ollama_model, active_ollama_url = ollama_model, ollama_base_url
-elif selected_provider == "Ollama Cloud (hosted)":
-    active_ollama_model, active_ollama_url = ollama_cloud_model, "https://ollama.com"
-    st.caption(f"Uses hosted model `{ollama_cloud_model}`. Your Ollama account includes limited starter usage; check its [current pricing and limits](https://ollama.com/pricing).")
-    st.warning("Anyone who can use this app may use your configured Ollama account quota. Avoid personal or sensitive questions.")
 elif selected_provider == "OpenAI":
-    active_ollama_model, active_ollama_url = ollama_model, ollama_base_url
     st.caption("When enabled, Sprout sends your question and computed answer evidence to OpenAI. Avoid personal or sensitive information; API usage may incur charges.")
 if "sprout_messages" not in st.session_state:
     st.session_state.sprout_messages = []
@@ -288,8 +275,8 @@ if question := st.chat_input("Ask about recent conditions or historical greennes
     response = answer_question(question)
     if use_llm:
         try:
-            if selected_provider in ("Ollama (local)", "Ollama Cloud (hosted)"):
-                response = rephrase_with_ollama(question, response, active_ollama_model, active_ollama_url, ollama_api_key)
+            if selected_provider == "Ollama (local)":
+                response = rephrase_with_ollama(question, response, ollama_model, ollama_base_url)
             else:
                 response = rephrase_evidence(question, response, openai_key, openai_model)
         except Exception:
